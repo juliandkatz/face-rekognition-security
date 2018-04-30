@@ -1,0 +1,10 @@
+{
+  "name": "hackathon-image-capture",
+  "version": "0.0.0",
+  "dependencies": {
+    "raspicam": "^0.2.14",
+    "aws-sdk": "^2.215.1",
+    "mz": "^2.7.0",
+    "serverless-pseudo-parameters": "^1.4.2"
+  }
+}

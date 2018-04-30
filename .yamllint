@@ -1,0 +1,17 @@
+---
+extends: default
+
+rules:
+  line-length: disable
+  document-start:
+    present: true
+    level: error
+  document-end:
+    present: false
+  indentation:
+    indent-sequences: false
+    spaces: 2
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+  truthy: disable

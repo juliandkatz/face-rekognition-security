@@ -1,0 +1,130 @@
+---
+# The `service` block is the name of the service
+service: '${env:PROJECT_NAME}'
+
+# The `provider` block defines where your service will be deployed
+provider:
+  name: aws
+  runtime: nodejs8.10
+  iamRoleStatements:
+  - Effect: Allow
+    Action:
+    - "rekognition:DetectFaces"
+    - "rekognition:SearchFacesByImage"
+    - "rekognition:DetectLabels"
+    - "sqs:SendMessage"
+    - "s3:putObject"
+    Resource:
+    - "*"
+
+plugins:
+- serverless-pseudo-parameters
+
+custom:
+  imagesBucketName: '${env:PROJECT_NAME}-#{AWS::Region}-images'
+
+# The `functions` block defines what code to deploy
+functions:
+
+  faceRecognizer:
+    handler: src/faceRecognizer.main
+    environment:
+      FACE_COLLECTION_ID: '${env:PROJECT_NAME}-face-matches'
+      SQS_QUEUE_URL:
+        Ref: ResultsQueue
+      IMAGES_BUCKET: "${self:custom.imagesBucketName}"
+    events:
+    - stream:
+        type: kinesis
+        arn:
+          Fn::GetAtt:
+          - FrameStream
+          - Arn
+
+  catalogueFaceImage:
+    handler: src/catalogueFaceImage.main
+    environment:
+      IMAGES_BUCKET: "${self:custom.imagesBucketName}"
+    events:
+    - s3: "${self:custom.imagesBucketName}"  # This creates a bucket with this name and reacts to it
+
+resources:
+
+  Resources:
+
+    FrameStream:
+      Type: "AWS::Kinesis::Stream"
+      Properties:
+        Name: "${env:PROJECT_NAME}-#{AWS::Region}-frame-stream"
+        ShardCount: 1
+
+    ReferenceImageBucket:
+      Type: "AWS::S3::Bucket"
+      Properties:
+        BucketName: '${env:PROJECT_NAME}-#{AWS::Region}-reference-images'
+
+    ResultsQueue:
+      Type: "AWS::SQS::Queue"
+      Properties:
+        QueueName: "${env:PROJECT_NAME}-#{AWS::Region}-results-queue"
+
+    RaspberryPiUser:
+      Type: "AWS::IAM::User"
+      Properties:
+        UserName: '${env:PROJECT_NAME}-raspberry-pi-user'
+        Policies:
+        - PolicyName: kinesis-write
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: Allow
+              Action:
+              - 'kinesis:PutRecord'
+              - 'kinesis:PutRecords'
+              - 'kinesis:DescribeStream'
+              Resource:
+              - Fn::GetAtt: FrameStream.Arn
+            - Effect: Allow
+              Action:
+              - 'kinesis:ListStreams'
+              Resource:
+              - '*'
+        - PolicyName: sqs-read
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: Allow
+              Action:
+              - 'sqs:SendMessage'
+              - 'sqs:SendMessageBatch'
+              Resource:
+              - Fn::GetAtt: ResultsQueue.Arn
+            - Effect: Allow
+              Action:
+              - 'sqs:ListQueues'
+              Resource:
+              - '*'
+
+    ImageMetadataTable:
+      Type: "AWS::DynamoDB::Table"
+      Properties:
+        TableName: '${env:PROJECT_NAME}-image-metadata'
+        AttributeDefinitions:
+        - AttributeName: 'S3PhotoId'
+          AttributeType: 'S'
+        - AttributeName: 'RekognitionFaceId'
+          AttributeType: 'S'
+        - AttributeName: 'RekognitionImageId'
+          AttributeType: 'S'
+        - AttributeName: 'PhotoEventTime'
+          AttributeType: 'S'
+        - AttributeName: 'PersonUniqueId'
+          AttributeType: 'S'
+
+    IdentifiedPersonsTable:
+      Type: "AWS::DynamoDB::Table"
+      Properties:
+        TableName: '${env:PROJECT_NAME}-identified-persons'
+        AttributeDefinitions:
+        - AttributeName: 'PersonUniqueId'
+          AttributeType: 'S'

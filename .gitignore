@@ -1,0 +1,14 @@
+# Dependency directories
+node_modules/
+
+# Log Files
+package-lock.json*
+
+.idea
+face_collection/index-images/*
+
+.serverless
+
+.DS_Store
+
+mac-capture-image/output/snapshot.jpg
